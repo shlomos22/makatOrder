@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ניהול לטרון | AssetMap Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00f2ff; --bg-dark: #0a0c14; --bg-panel: #161b2a;
+            --text-main: #e6edf3; --text-muted: #8b949e; --danger: #ff4d4d;
+            --success: #28a745; --glass-border: rgba(255, 255, 255, 0.1); --transition: all 0.25s ease;
+        }
+
+        body {
+            font-family: 'Heebo', sans-serif; margin: 0; background-color: var(--bg-dark);
+            color: var(--text-main); overflow: hidden; display: flex;
+            justify-content: center; align-items: center; height: 100vh;
+        }
+
+        /* לובי */
+        #lobby { display: flex; flex-direction: column; align-items: center; gap: 40px; width: 100%; max-width: 1000px; padding: 40px; }
+        .room-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; }
+        .room-card {
+            background-color: var(--bg-panel); padding: 40px 20px; border-radius: 20px;
+            border: 1px solid var(--glass-border); cursor: pointer; transition: var(--transition); text-align: center;
+        }
+        .room-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 0 30px rgba(0, 242, 255, 0.15); }
+
+        /* מסך החדר */
+        #room-view { display: none; position: relative; width: 100vw; height: 100vh; opacity: 0; transition: var(--transition); }
+        #room-header {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 15px; background: rgba(22, 27, 42, 0.95);
+            padding: 10px 20px; border-radius: 40px; border: 1px solid var(--glass-border);
+            backdrop-filter: blur(15px); z-index: 100; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* כפתורים למעלה */
+        .header-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--glass-border); cursor: pointer; font-weight: bold; font-family: inherit; transition: var(--transition); color: white; }
+        .back-btn { background: rgba(255,255,255,0.1); }
+        .sync-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+
+        #canvas {
+            width: 100%; height: 100%; position: relative; cursor: crosshair;
+            background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;
+        }
+
+        /* אייקון עמדה */
+        .asset-icon { position: absolute; display: flex; flex-direction: column; align-items: center; cursor: grab; z-index: 10; user-select: none; }
+        .asset-icon:active { cursor: grabbing; }
+        .asset-name-tag { font-size: 12px; font-weight: 800; color: var(--primary); margin-bottom: 4px; background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+        .asset-visual { background: #1c2135; border: 1px solid var(--glass-border); padding: 10px; border-radius: 12px; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); pointer-events: none; }
+
+        /* מודאלים */
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 999; }
+        #modal {
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--bg-panel); padding: 30px; border-radius: 24px; border: 1px solid var(--glass-border);
+            z-index: 1000; width: 340px; box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+        }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.8rem; }
+        input, select { width: 100%; padding: 12px; background: #0a0c14; border: 1px solid var(--glass-border); border-radius: 10px; color: white; box-sizing: border-box; font-family: inherit; }
+        
+        .btn-row { display: flex; gap: 8px; margin-top: 20px; }
+        button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 800; cursor: pointer; transition: var(--transition); font-family: inherit; }
+        .btn-save { background: var(--primary); color: #000; }
+        .btn-cancel { background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--glass-border); }
+        .btn-edit { background: #ffcc00; color: #000; }
+        .btn-delete { background: var(--danger); color: white; }
+		/* כפתור סנכרון - מתחיל זהה לחזור */
+		.sync-btn { 
+			background: rgba(255,255,255,0.1); 
+			border: 1px solid var(--glass-border);
+			color: white;
+		}
+
+		/* מצבי תוצאה */
+		.sync-success { 
+			background-color: var(--success) !important; 
+			border-color: var(--success) !important;
+			color: white !important;
+		}
+
+		.sync-error { 
+			background-color: var(--danger) !important; 
+			border-color: var(--danger) !important;
+			color: white !important;
+		}
+		
+		/* מיכל הכותרת - מבטיח שורה אחת */
+		#room-header {
+			position: absolute; 
+			top: 20px; 
+			left: 50%; 
+			transform: translateX(-50%);
+			display: flex; /* מסדר את הילדים בשורה */
+			flex-direction: row; /* כיוון שורה */
+			align-items: center; /* יישור אנכי למרכז */
+			gap: 15px; /* רווח קבוע בין האלמנטים */
+			background: rgba(22, 27, 42, 0.95);
+			padding: 10px 20px; 
+			border-radius: 40px; 
+			border: 1px solid var(--glass-border);
+			backdrop-filter: blur(15px); 
+			z-index: 100;
+			box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+			
+			/* מונע מהמיכל להתכווץ יותר מדי */
+			min-width: max-content; 
+			max-width: 90vw; /* שלא יצא מגבולות המסך בטלפון */
+		}
+
+		/* הגדרות כפתור גמיש */
+		.header-btn {
+			padding: 8px 16px; 
+			border-radius: 20px; 
+			border: 1px solid var(--glass-border); 
+			cursor: pointer; 
+			font-weight: bold; 
+			font-family: inherit; 
+			transition: var(--transition); 
+			color: white;
+			
+			/* קריטי: מונע מהטקסט לרדת שורה וגורם לכפתור להתרחב לפי הכיתוב */
+			white-space: nowrap; 
+			width: auto; 
+			flex-shrink: 0; /* מונע מהכפתור להתכווץ אם אין מקום */
+		}
+
+		/* שם החדר באמצע - יתפוס את המרחב שנותר או יתכווץ בעדינות */
+		#room-title {
+			margin: 0;
+			font-size: 1.2rem;
+			color: var(--primary);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis; /* אם השם ארוך מדי, הוא יסתיים ב... */
+		}
+    </style>
+</head>
+<body>
+
+    <div id="lobby">
+        <h1 style="font-weight: 900; color: white;">ניהול לטרון <span style="color:var(--primary)">AssetMap</span></h1>
+        <div class="room-grid">
+            <div class="room-card" onclick="enterRoom('חמ\'ל רבצ\'ר')"><h3>חמ"ל רבצ"ר</h3></div>
+            <div class="room-card" onclick="enterRoom('חד\'ן רבצ\'ר')"><h3>חד"ן רבצ"ר</h3></div>
+            <div class="room-card" onclick="enterRoom('מכלול תאים')"><h3>מכלול תאים</h3></div>
+            <div class="room-card" onclick="enterRoom('מאנ\'ח')"><h3>מאנ"ח</h3></div>
+            <div class="room-card" onclick="enterRoom('תר\'ח לטרון')"><h3>תר"ח לטרון</h3></div>
+            <div class="room-card" onclick="enterRoom('תר\'ח לאומי')"><h3>תר"ח לאומי</h3></div>
+        </div>
+    </div>
+
+    <div id="room-view">
+        <div id="room-header">
+            <button class="header-btn back-btn" onclick="exitRoom()">← חזור</button>
+            <h2 id="room-title" style="margin: 0; font-size: 1.2rem; color: var(--primary);"></h2>
+			<button class="header-btn sync-btn" onclick="manualSync()">סנכרון 🔄</button>
+        </div>
+        <div id="canvas"></div>
+    </div>
+
+    <div id="overlay" onclick="closeModal()"></div>
+    
+    <div id="modal">
+        <h3 id="modalTitle">הגדרת עמדה</h3>
+        <div id="formFields">
+            <div class="input-group">
+                <label>סוג עמדה</label>
+                <select id="assetType" onchange="toggleFields()">
+                    <option value="station">💻🖥️ עמדת מחשב + מסך</option>
+                    <option value="printer">🖨️ מדפסת</option>
+                    <option value="tv">📺 טלוויזיה</option>
+                    <option value="uc">📞 טלפון UC</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>שם עמדה (ייחודי)</label>
+                <input type="text" id="stationName">
+            </div>
+            <div id="skuFields">
+                <div class="input-group" id="pcGroup"><label>מק"ט מחשב</label><input type="text" id="pcSku"></div>
+                <div class="input-group" id="monGroup"><label id="monLabel">מק"ט מסך</label><input type="text" id="monitorSku"></div>
+            </div>
+            <div class="btn-row">
+                <button class="btn-save" id="saveBtn" onclick="saveAsset()">שמור וסנכרן</button>
+                <button class="btn-cancel" onclick="closeModal()">ביטול</button>
+            </div>
+        </div>
+
+        <div id="detailsFields" style="display:none;">
+            <div id="viewContent"></div>
+            <div class="btn-row">
+                <button class="btn-edit" id="editBtn">ערוך ✏️</button>
+                <button class="btn-delete" id="deleteBtn">מחק 🗑️</button>
+            </div>
+            <button class="btn-cancel" style="width:100%; margin-top:10px;" onclick="closeModal()">סגור</button>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyhSXO_Xw0MaB4U2aCdLrPHeo9ez6UJSG-xNVwGyR8JxoKJrCWK_7s9F1uAY2MXuJ3tRQ/exec"; 
+        
+        const canvas = document.getElementById('canvas');
+        const modal = document.getElementById('modal');
+        const overlay = document.getElementById('overlay');
+        
+        let currentRoom = "";
+        let lastCoords = { x: 0, y: 0 };
+        let editingId = null;
+        let db = {};
+
+        // משתני גרירה ומניעת קליק כפול
+        let isDragging = false;
+        let dragStarted = false;
+        let activeAsset = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        async function loadData() {
+            try {
+                const response = await fetch(SCRIPT_URL);
+                db = await response.json();
+            } catch (e) {
+                db = JSON.parse(localStorage.getItem('roomDB_latrun')) || {};
+            }
+            renderAssets();
+        }
+		
+		async function manualSync() {
+			const btn = document.querySelector('.sync-btn');
+			const originalText = "סנכרון 🔄";
+			const originalClass = "header-btn sync-btn"; // המחלקה המקורית
+
+			// שינוי מצב התחלתי
+			btn.innerText = "מסנכרן...";
+			btn.className = originalClass; // איפוס צבעים בזמן עבודה
+			btn.disabled = true;
+
+			localStorage.setItem('roomDB_latrun', JSON.stringify(db));
+
+			try {
+				// שליחה ל-Google Sheets
+				// mode: 'no-cors' לא מחזיר סטטוס אמיתי, לכן נניח הצלחה אם לא נזרקה שגיאת רשת
+				await fetch(SCRIPT_URL, {
+					method: 'POST',
+					mode: 'no-cors',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ action: "saveAll", db: db })
+				});
+
+				// הצלחה
+				btn.innerText = "סונכרן בהצלחה ✅";
+				btn.className = originalClass + " sync-success";
+			} catch (e) {
+				// שגיאה (למשל אין אינטרנט)
+				console.error("Sync failed:", e);
+				btn.innerText = "תקלה בסנכרון ❌";
+				btn.className = originalClass + " sync-error";
+			}
+
+			// החזרה למצב רגיל אחרי 3 שניות
+			setTimeout(() => {
+				btn.innerText = originalText;
+				btn.className = originalClass;
+				btn.disabled = false;
+			}, 3000);
+		}
+
+        function enterRoom(roomName) {
+            currentRoom = roomName;
+            document.getElementById('room-title').innerText = roomName;
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('room-view').style.display = 'block';
+            setTimeout(() => document.getElementById('room-view').style.opacity = '1', 50);
+            renderAssets();
+        }
+
+        function exitRoom() {
+            document.getElementById('room-view').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('room-view').style.display = 'none';
+                document.getElementById('lobby').style.display = 'flex';
+            }, 300);
+        }
+
+        // ניהול עכבר - הפרדה בין גרירה ללחיצה
+        canvas.addEventListener('mousedown', (e) => {
+            const icon = e.target.closest('.asset-icon');
+            if (icon) {
+                isDragging = true;
+                dragStarted = false; // עדיין לא זז
+                activeAsset = icon;
+                const rect = icon.getBoundingClientRect();
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+            } else if (e.target === canvas) {
+                lastCoords = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging || !activeAsset) return;
+            dragStarted = true; // העכבר זז בזמן לחיצה = גרירה
+            activeAsset.style.left = (e.clientX - dragOffset.x) + 'px';
+            activeAsset.style.top = (e.clientY - dragOffset.y) + 'px';
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (isDragging && activeAsset) {
+                const id = activeAsset.getAttribute('data-id');
+                const asset = db[currentRoom].find(a => a.id == id);
+                
+                if (dragStarted) {
+                    // אם הייתה גרירה - עדכון מיקום מקומי בלבד
+                    asset.x = parseInt(activeAsset.style.left) + 30;
+                    asset.y = parseInt(activeAsset.style.top) + 40;
+                    localStorage.setItem('roomDB_latrun', JSON.stringify(db));
+                } else {
+                    // אם לא זז - פתיחת פרטים בלחיצה בודדת
+                    showDetails(asset);
+                }
+            }
+            isDragging = false;
+            dragStarted = false;
+            activeAsset = null;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (e.target !== canvas || dragStarted) return;
+            editingId = null; 
+            showForm();
+        });
+
+        async function saveAsset() {
+            const name = (document.getElementById('stationName').value || "").trim();
+            if (!name) return alert("חובה להזין שם עמדה");
+
+            const isDuplicate = db[currentRoom]?.some(a => a.name === name && a.id !== editingId);
+            if (isDuplicate) return alert("שם העמדה כבר קיים בחדר זה!");
+
+            const assetData = {
+                type: document.getElementById('assetType').value,
+                name: name,
+                pc: document.getElementById('pcSku').value,
+                mon: document.getElementById('monitorSku').value
+            };
+
+            if (editingId) {
+                const idx = db[currentRoom].findIndex(a => a.id === editingId);
+                db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
+            } else {
+                if (!db[currentRoom]) db[currentRoom] = [];
+                db[currentRoom].push({ id: Date.now(), ...assetData, x: lastCoords.x, y: lastCoords.y });
+            }
+
+            renderAssets();
+            closeModal();
+            await manualSync(); // שמירה אקטיבית רק פה
+        }
+
+        async function deleteAsset(id) {
+            if (!confirm("למחוק עמדה זו?")) return;
+            db[currentRoom] = db[currentRoom].filter(a => a.id !== id);
+            renderAssets();
+            closeModal();
+            await manualSync();
+        }
+
+        function renderAssets() {
+            canvas.innerHTML = '';
+            if (db[currentRoom]) db[currentRoom].forEach(asset => {
+                const div = document.createElement('div');
+                div.className = 'asset-icon';
+                div.setAttribute('data-id', asset.id);
+                div.style.left = (asset.x - 30) + 'px';
+                div.style.top = (asset.y - 40) + 'px';
+                let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻🖥️";
+                div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
+                canvas.appendChild(div);
+            });
+        }
+
+        function showForm(data = null) {
+            overlay.style.display = 'block'; modal.style.display = 'block';
+            document.getElementById('formFields').style.display = 'block';
+            document.getElementById('detailsFields').style.display = 'none';
+            if (data) {
+                editingId = data.id; document.getElementById('assetType').value = data.type;
+                document.getElementById('stationName').value = data.name;
+                document.getElementById('pcSku').value = data.pc || ''; document.getElementById('monitorSku').value = data.mon || '';
+            } else {
+                editingId = null; document.getElementById('stationName').value = '';
+                document.getElementById('pcSku').value = ''; document.getElementById('monitorSku').value = '';
+            }
+            toggleFields();
+        }
+
+        function showDetails(asset) {
+            overlay.style.display = 'block'; modal.style.display = 'block';
+            document.getElementById('formFields').style.display = 'none';
+            document.getElementById('detailsFields').style.display = 'block';
+            document.getElementById('viewContent').innerHTML = `
+                <div style="text-align:right; line-height:1.6;">
+                    <b>שם:</b> ${asset.name}<br><b>סוג:</b> ${asset.type}<br>
+                    ${asset.pc ? `<b>מק"ט מחשב:</b> ${asset.pc}<br>` : ''}
+                    ${asset.mon ? `<b>מק"ט מכשיר:</b> ${asset.mon}<br>` : ''}
+                </div>`;
+            document.getElementById('editBtn').onclick = () => showForm(asset);
+            document.getElementById('deleteBtn').onclick = () => deleteAsset(asset.id);
+        }
+
+        function toggleFields() {
+            const type = document.getElementById('assetType').value;
+            document.getElementById('pcGroup').style.display = (type === 'station') ? 'block' : 'none';
+            document.getElementById('monLabel').innerText = (type === 'station') ? "מק\"ט מסך" : (type === 'printer') ? "מק\"ט מדפסת" : (type === 'tv') ? "מק\"ט טלוויזיה" : "מק\"ט טלפון";
+        }
+        function closeModal() { modal.style.display = 'none'; overlay.style.display = 'none'; }
+        
+        loadData();
+    </script>
+</body>
+</html>
