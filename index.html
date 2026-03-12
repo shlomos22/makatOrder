@@ -219,8 +219,7 @@
             <button class="btn-cancel" style="width:100%; margin-top:10px;" onclick="closeModal()">סגור</button>
         </div>
     </div>
-
-    <script>
+	<script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyhSXO_Xw0MaB4U2aCdLrPHeo9ez6UJSG-xNVwGyR8JxoKJrCWK_7s9F1uAY2MXuJ3tRQ/exec"; 
         
         const canvas = document.getElementById('canvas');
@@ -232,11 +231,11 @@
         let editingId = null;
         let db = {};
 
-        // משתני גרירה ומניעת קליק כפול
         let isDragging = false;
-        let dragStarted = false;
         let activeAsset = null;
         let dragOffset = { x: 0, y: 0 };
+        let longPressTimer = null;
+        const LONG_PRESS_DURATION = 300;
 
         async function loadData() {
             try {
@@ -247,216 +246,140 @@
             }
             renderAssets();
         }
-		
-		async function manualSync() {
-			const btn = document.querySelector('.sync-btn');
-			const originalText = "סנכרון 🔄";
-			const originalClass = "header-btn sync-btn"; // המחלקה המקורית
 
-			// שינוי מצב התחלתי
-			btn.innerText = "מסנכרן...";
-			btn.className = originalClass; // איפוס צבעים בזמן עבודה
-			btn.disabled = true;
-
-			localStorage.setItem('roomDB_latrun', JSON.stringify(db));
-
-			try {
-				// שליחה ל-Google Sheets
-				// mode: 'no-cors' לא מחזיר סטטוס אמיתי, לכן נניח הצלחה אם לא נזרקה שגיאת רשת
-				await fetch(SCRIPT_URL, {
-					method: 'POST',
-					mode: 'no-cors',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ action: "saveAll", db: db })
-				});
-
-				// הצלחה
-				btn.innerText = "סונכרן בהצלחה ✅";
-				btn.className = originalClass + " sync-success";
-			} catch (e) {
-				// שגיאה (למשל אין אינטרנט)
-				console.error("Sync failed:", e);
-				btn.innerText = "תקלה בסנכרון ❌";
-				btn.className = originalClass + " sync-error";
-			}
-
-			// החזרה למצב רגיל אחרי 3 שניות
-			setTimeout(() => {
-				btn.innerText = originalText;
-				btn.className = originalClass;
-				btn.disabled = false;
-			}, 3000);
-		}
-
+        // פונקציות הכניסה והיציאה - כאן התיקון המרכזי
         function enterRoom(roomName) {
             currentRoom = roomName;
             document.getElementById('room-title').innerText = roomName;
             document.getElementById('lobby').style.display = 'none';
             document.getElementById('room-view').style.display = 'block';
-            setTimeout(() => document.getElementById('room-view').style.opacity = '1', 50);
+            setTimeout(() => {
+                document.getElementById('room-view').style.opacity = '1';
+                // חיבור המאזינים רק כשנכנסים לחדר
+                attachCanvasEvents();
+            }, 50);
             renderAssets();
         }
 
         function exitRoom() {
             document.getElementById('room-view').style.opacity = '0';
+            // ניתוק המאזינים כשיוצאים ללובי
+            detachCanvasEvents();
             setTimeout(() => {
                 document.getElementById('room-view').style.display = 'none';
                 document.getElementById('lobby').style.display = 'flex';
             }, 300);
         }
 
-        // פונקציית עזר לקבלת קואורדינטות (עכבר או מגע)
-		function getCoords(e) {
-		    if (e.touches && e.touches.length > 0) {
-		        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-		    }
-		    return { x: e.clientX, y: e.clientY };
-		}
+        function getCoords(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
 
-		// משתני ניהול גרירה ולחיצה ארוכה
-        let isDragging = false;
-        let activeAsset = null;
-        let dragOffset = { x: 0, y: 0 };
-        let longPressTimer = null;
-        const LONG_PRESS_DURATION = 300; // זמן במילי-שניות להפעלת גרירה
-
-		        // פונקציות ניהול אירועים ממוקדות לקנבס בלבד
         const startAction = (e) => {
             const coords = getCoords(e);
             const icon = e.target.closest('.asset-icon');
-            
             if (icon) {
                 activeAsset = icon;
-                const rect = icon.getBoundingClientRect();
-                dragOffset.x = coords.x - rect.left;
-                dragOffset.y = coords.y - rect.top;
-
                 longPressTimer = setTimeout(() => {
                     isDragging = true;
-                    activeAsset.style.cursor = 'grabbing';
                     activeAsset.style.filter = 'brightness(1.5)';
                 }, LONG_PRESS_DURATION);
-            } else {
-                // לחיצה על השטח הריק של הקנבס
+            } else if (e.target === canvas) {
                 lastCoords = { x: coords.x, y: coords.y };
             }
         };
 
         const moveAction = (e) => {
             if (!isDragging || !activeAsset) return;
-            
-            // מונע גלילה רק בזמן גרירה פעילה
             if (e.cancelable) e.preventDefault();
-
             const coords = getCoords(e);
-            const rect = canvas.getBoundingClientRect();
-
-            // הגבלה שהאייקון לא יצא מגבולות הקנבס בזמן הגרירה
-            let newX = coords.x;
-            let newY = coords.y;
-
-            activeAsset.style.left = newX + 'px';
-            activeAsset.style.top = newY + 'px';
+            activeAsset.style.left = coords.x + 'px';
+            activeAsset.style.top = coords.y + 'px';
         };
 
         const endAction = (e) => {
             clearTimeout(longPressTimer);
-
             if (activeAsset) {
                 const id = activeAsset.getAttribute('data-id');
                 const asset = db[currentRoom]?.find(a => String(a.id) === String(id));
-
                 if (isDragging && asset) {
                     const rect = canvas.getBoundingClientRect();
                     const finalCoords = getCoords(e.changedTouches ? e.changedTouches[0] : e);
-                    
                     asset.x = ((finalCoords.x - rect.left) / rect.width) * 100;
                     asset.y = ((finalCoords.y - rect.top) / rect.height) * 100;
-                    
-                    localStorage.setItem('roomDB_latrun', JSON.stringify(db));
-                    activeAsset.style.filter = '';
+                    saveToLocal();
                     renderAssets(); 
                 } else if (!isDragging && asset) {
-                    // לחיצה קצרה על אייקון
                     showDetails(asset);
                 }
             } else if (e.target === canvas && !isDragging) {
-                // לחיצה קצרה על רקע הקנבס (ליצירת חדש)
                 showForm();
             }
-
             isDragging = false;
             activeAsset = null;
         };
 
-        // חיבור המאזינים - שים לב: עברנו מ-window ל-canvas איפה שאפשר
-        canvas.addEventListener('mousedown', startAction);
-        canvas.addEventListener('touchstart', startAction, { passive: false });
-
-        // move ו-end חייבים להישאר על window למקרה שהאצבע "בורחת" מהקנבס בזמן גרירה מהירה
-        window.addEventListener('mousemove', moveAction);
-        window.addEventListener('touchmove', moveAction, { passive: false });
-        window.addEventListener('mouseup', endAction);
-        window.addEventListener('touchend', endAction);
-		
-		// עדכון פונקציית הרינדור לעבודה באחוזים
-		function renderAssets() {
-		    canvas.innerHTML = '';
-		    if (db[currentRoom]) db[currentRoom].forEach(asset => {
-		        const div = document.createElement('div');
-		        div.className = 'asset-icon';
-		        div.setAttribute('data-id', asset.id);
-		        
-		        // מיקום לפי אחוזים מהמסך
-		        div.style.left = asset.x + '%';
-		        div.style.top = asset.y + '%';
-		        
-		        let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻";
-		        div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
-		        canvas.appendChild(div);
-		    });
-		}
-		
-		// עדכון פונקציית השמירה (saveAsset) לחישוב אחוזים ראשוני
-		async function saveAsset() {
-		    const name = (document.getElementById('stationName').value || "").trim();
-		    if (!name) return alert("חובה להזין שם עמדה");
-		
-		    const isDuplicate = db[currentRoom]?.some(a => a.name === name && a.id !== editingId);
-		    if (isDuplicate) return alert("שם העמדה כבר קיים בחדר זה!");
-		
-		    const rect = canvas.getBoundingClientRect();
-		    // המרת מיקום הלחיצה (פיקסלים) לאחוזים מהקנבס
-		    const xPct = ((lastCoords.x - rect.left) / rect.width) * 100;
-		    const yPct = ((lastCoords.y - rect.top) / rect.height) * 100;
-		
-		    const assetData = {
-		        type: document.getElementById('assetType').value,
-		        name: name,
-		        pc: document.getElementById('pcSku').value,
-		        mon: document.getElementById('monitorSku').value
-		    };
-		
-		    if (editingId) {
-		        const idx = db[currentRoom].findIndex(a => a.id === editingId);
-		        db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
-		    } else {
-		        if (!db[currentRoom]) db[currentRoom] = [];
-		        db[currentRoom].push({ id: Date.now(), ...assetData, x: xPct, y: yPct });
-		    }
-		
-		    renderAssets();
-		    closeModal();
-		    await manualSync();
-		}
-		
-        async function deleteAsset(id) {
-            if (!confirm("למחוק עמדה זו?")) return;
-            db[currentRoom] = db[currentRoom].filter(a => a.id !== id);
-            renderAssets();
-            closeModal();
-            await manualSync();
+        // פונקציות עזר לניהול אירועים
+        function attachCanvasEvents() {
+            canvas.addEventListener('mousedown', startAction);
+            canvas.addEventListener('touchstart', startAction, { passive: false });
+            window.addEventListener('mousemove', moveAction);
+            window.addEventListener('touchmove', moveAction, { passive: false });
+            window.addEventListener('mouseup', endAction);
+            window.addEventListener('touchend', endAction);
         }
+
+        function detachCanvasEvents() {
+            canvas.removeEventListener('mousedown', startAction);
+            canvas.removeEventListener('touchstart', startAction);
+            window.removeEventListener('mousemove', moveAction);
+            window.removeEventListener('touchmove', moveAction);
+            window.removeEventListener('mouseup', endAction);
+            window.removeEventListener('touchend', endAction);
+        }
+
+        function renderAssets() {
+            canvas.innerHTML = '';
+            if (!currentRoom || !db[currentRoom]) return;
+            db[currentRoom].forEach(asset => {
+                const div = document.createElement('div');
+                div.className = 'asset-icon';
+                div.setAttribute('data-id', asset.id);
+                div.style.left = asset.x + '%';
+                div.style.top = asset.y + '%';
+                let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻";
+                div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
+                canvas.appendChild(div);
+            });
+        }
+
+        async function manualSync() {
+            const btn = document.querySelector('.sync-btn');
+            btn.innerText = "מסנכרן...";
+            saveToLocal();
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: "saveAll", db: db })
+                });
+                btn.innerText = "סונכרן בהצלחה ✅";
+                btn.classList.add('sync-success');
+            } catch (e) {
+                btn.innerText = "תקלה בסנכרון ❌";
+                btn.classList.add('sync-error');
+            }
+            setTimeout(() => {
+                btn.innerText = "סנכרון 🔄";
+                btn.classList.remove('sync-success', 'sync-error');
+            }, 3000);
+        }
+
+        function saveToLocal() { localStorage.setItem('roomDB_latrun', JSON.stringify(db)); }
 
         function showForm(data = null) {
             overlay.style.display = 'block'; modal.style.display = 'block';
@@ -473,32 +396,52 @@
             toggleFields();
         }
 
+        async function saveAsset() {
+            const name = (document.getElementById('stationName').value || "").trim();
+            if (!name) return alert("חובה להזין שם עמדה");
+            const rect = canvas.getBoundingClientRect();
+            const xPct = ((lastCoords.x - rect.left) / rect.width) * 100;
+            const yPct = ((lastCoords.y - rect.top) / rect.height) * 100;
+            const assetData = {
+                type: document.getElementById('assetType').value,
+                name: name,
+                pc: document.getElementById('pcSku').value,
+                mon: document.getElementById('monitorSku').value
+            };
+            if (editingId) {
+                const idx = db[currentRoom].findIndex(a => a.id === editingId);
+                db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
+            } else {
+                if (!db[currentRoom]) db[currentRoom] = [];
+                db[currentRoom].push({ id: Date.now(), ...assetData, x: xPct, y: yPct });
+            }
+            renderAssets(); closeModal(); await manualSync();
+        }
+
         function showDetails(asset) {
             overlay.style.display = 'block'; modal.style.display = 'block';
             document.getElementById('formFields').style.display = 'none';
             document.getElementById('detailsFields').style.display = 'block';
-            document.getElementById('viewContent').innerHTML = `
-                <div style="text-align:right; line-height:1.6;">
-                    <b>שם:</b> ${asset.name}<br><b>סוג:</b> ${asset.type}<br>
-                    ${asset.pc ? `<b>מק"ט מחשב:</b> ${asset.pc}<br>` : ''}
-                    ${asset.mon ? `<b>מק"ט מכשיר:</b> ${asset.mon}<br>` : ''}
-                </div>`;
+            document.getElementById('viewContent').innerHTML = `<div style="text-align:right;"><b>שם:</b> ${asset.name}<br><b>סוג:</b> ${asset.type}<br>${asset.pc ? `<b>מק"ט:</b> ${asset.pc}` : ''}</div>`;
             document.getElementById('editBtn').onclick = () => showForm(asset);
-            document.getElementById('deleteBtn').onclick = () => deleteAsset(asset.id);
+            document.getElementById('deleteBtn').onclick = () => {
+                if(confirm("למחוק?")) { db[currentRoom] = db[currentRoom].filter(a => a.id !== asset.id); renderAssets(); closeModal(); manualSync(); }
+            };
         }
 
         function toggleFields() {
             const type = document.getElementById('assetType').value;
             document.getElementById('pcGroup').style.display = (type === 'station') ? 'block' : 'none';
-            document.getElementById('monLabel').innerText = (type === 'station') ? "מק\"ט מסך" : (type === 'printer') ? "מק\"ט מדפסת" : (type === 'tv') ? "מק\"ט טלוויזיה" : "מק\"ט טלפון";
         }
         function closeModal() { modal.style.display = 'none'; overlay.style.display = 'none'; }
         
         loadData();
     </script>
+
 </body>
 
 </html>
+
 
 
 
