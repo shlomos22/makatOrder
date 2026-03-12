@@ -44,12 +44,19 @@
         .sync-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
 
         #canvas {
-            width: 100%; height: 100%; position: relative; cursor: crosshair;
-            background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;
-        }
-
+		    width: 100%; height: 100%; position: relative; cursor: crosshair;
+		    background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;
+		    /* מונע מהמסך לזוז כשגוררים בטלפון */
+		    touch-action: none; 
+		}
+		
         /* אייקון עמדה */
-        .asset-icon { position: absolute; display: flex; flex-direction: column; align-items: center; cursor: grab; z-index: 10; user-select: none; }
+		.asset-icon { 
+		    position: absolute; display: flex; flex-direction: column; align-items: center; 
+		    z-index: 10; user-select: none;
+		    /* מיקום לפי מרכז האייקון */
+		    transform: translate(-50%, -50%); 
+		}
         .asset-icon:active { cursor: grabbing; }
         .asset-name-tag { font-size: 12px; font-weight: 800; color: var(--primary); margin-bottom: 4px; background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
         .asset-visual { background: #1c2135; border: 1px solid var(--glass-border); padding: 10px; border-radius: 12px; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); pointer-events: none; }
@@ -298,86 +305,125 @@
             }, 300);
         }
 
-        // ניהול עכבר - הפרדה בין גרירה ללחיצה
-        canvas.addEventListener('mousedown', (e) => {
-            const icon = e.target.closest('.asset-icon');
-            if (icon) {
-                isDragging = true;
-                dragStarted = false; // עדיין לא זז
-                activeAsset = icon;
-                const rect = icon.getBoundingClientRect();
-                dragOffset.x = e.clientX - rect.left;
-                dragOffset.y = e.clientY - rect.top;
-            } else if (e.target === canvas) {
-                lastCoords = { x: e.clientX, y: e.clientY };
-            }
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            if (!isDragging || !activeAsset) return;
-            dragStarted = true; // העכבר זז בזמן לחיצה = גרירה
-            activeAsset.style.left = (e.clientX - dragOffset.x) + 'px';
-            activeAsset.style.top = (e.clientY - dragOffset.y) + 'px';
-        });
-
-        window.addEventListener('mouseup', (e) => {
-			if (isDragging && activeAsset) {
-				const id = activeAsset.getAttribute('data-id');
-				const asset = db[currentRoom].find(a => String(a.id) === String(id));
-				
-				if (dragStarted && asset) {
-					const rect = canvas.getBoundingClientRect();
-					// חישוב המיקום החדש באחוזים ביחס לקנבס
-					asset.x = ((e.clientX - rect.left) / rect.width) * 100;
-					asset.y = ((e.clientY - rect.top) / rect.height) * 100;
-					
-					localStorage.setItem('roomDB_latrun', JSON.stringify(db));
-					renderAssets(); // רינדור מחדש כדי "לנעול" את המיקום ב-%
-				} else if (!dragStarted && asset) {
-					showDetails(asset);
-				}
-			}
-			isDragging = false;
-			dragStarted = false;
-			activeAsset = null;
-		});
-
-        canvas.addEventListener('click', (e) => {
-            if (e.target !== canvas || dragStarted) return;
-            editingId = null; 
-            showForm();
-        });
-
-        async function saveAsset() {
-			const name = (document.getElementById('stationName').value || "").trim();
-			if (!name) return alert("חובה להזין שם עמדה");
-
-			const isDuplicate = db[currentRoom]?.some(a => a.name === name && a.id !== editingId);
-			if (isDuplicate) return alert("שם העמדה כבר קיים בחדר זה!");
-
-			const rect = canvas.getBoundingClientRect();
-			// המרת מיקום הלחיצה (פיקסלים) לאחוזים מהקנבס
-			const xPct = ((lastCoords.x - rect.left) / rect.width) * 100;
-			const yPct = ((lastCoords.y - rect.top) / rect.height) * 100;
-
-			const assetData = {
-				type: document.getElementById('assetType').value,
-				name: name,
-				pc: document.getElementById('pcSku').value,
-				mon: document.getElementById('monitorSku').value
-			};
-
-			if (editingId) {
-				const idx = db[currentRoom].findIndex(a => a.id === editingId);
-				db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
-			} else {
-				if (!db[currentRoom]) db[currentRoom] = [];
-				db[currentRoom].push({ id: Date.now(), ...assetData, x: xPct, y: yPct });
-			}
-
-			renderAssets();
-			closeModal();
-			await manualSync();
+        // פונקציית עזר לקבלת קואורדינטות (עכבר או מגע)
+		function getCoords(e) {
+		    if (e.touches && e.touches.length > 0) {
+		        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+		    }
+		    return { x: e.clientX, y: e.clientY };
+		}
+		
+		// תחילת גרירה / לחיצה
+		const startAction = (e) => {
+		    const coords = getCoords(e);
+		    const icon = e.target.closest('.asset-icon');
+		    
+		    if (icon) {
+		        isDragging = true;
+		        dragStarted = false;
+		        activeAsset = icon;
+		        const rect = icon.getBoundingClientRect();
+		        dragOffset.x = coords.x - rect.left;
+		        dragOffset.y = coords.y - rect.top;
+		    } else if (e.target === canvas) {
+		        lastCoords = { x: coords.x, y: coords.y };
+		    }
+		};
+		
+		// בזמן תנועה
+		const moveAction = (e) => {
+		    if (!isDragging || !activeAsset) return;
+		    dragStarted = true;
+		    const coords = getCoords(e);
+		    
+		    // הזזה ויזואלית בפיקסלים בזמן הגרירה
+		    activeAsset.style.left = coords.x + 'px';
+		    activeAsset.style.top = coords.y + 'px';
+		};
+		
+		// סיום פעולה
+		const endAction = (e) => {
+		    if (isDragging && activeAsset) {
+		        const id = activeAsset.getAttribute('data-id');
+		        const asset = db[currentRoom]?.find(a => String(a.id) === String(id));
+		        
+		        if (dragStarted && asset) {
+		            const rect = canvas.getBoundingClientRect();
+		            // שמירה סופית באחוזים (%)
+		            // חישוב המיקום היחסי של האצבע/עכבר בתוך הקנבס
+		            const finalCoords = getCoords(e.changedTouches ? e.changedTouches[0] : e);
+		            asset.x = ((finalCoords.x - rect.left) / rect.width) * 100;
+		            asset.y = ((finalCoords.y - rect.top) / rect.height) * 100;
+		            
+		            localStorage.setItem('roomDB_latrun', JSON.stringify(db));
+		            renderAssets(); // רינדור מחדש לקיבוע המיקום באחוזים
+		        } else if (!dragStarted && asset) {
+		            showDetails(asset);
+		        }
+		    }
+		    isDragging = false;
+		    dragStarted = false;
+		    activeAsset = null;
+		};
+		
+		// חיבור המאזינים גם לעכבר וגם למגע
+		canvas.addEventListener('mousedown', startAction);
+		window.addEventListener('mousemove', moveAction);
+		window.addEventListener('mouseup', endAction);
+		
+		canvas.addEventListener('touchstart', startAction, { passive: false });
+		window.addEventListener('touchmove', moveAction, { passive: false });
+		window.addEventListener('touchend', endAction);
+		
+		// עדכון פונקציית הרינדור לעבודה באחוזים
+		function renderAssets() {
+		    canvas.innerHTML = '';
+		    if (db[currentRoom]) db[currentRoom].forEach(asset => {
+		        const div = document.createElement('div');
+		        div.className = 'asset-icon';
+		        div.setAttribute('data-id', asset.id);
+		        
+		        // מיקום לפי אחוזים מהמסך
+		        div.style.left = asset.x + '%';
+		        div.style.top = asset.y + '%';
+		        
+		        let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻";
+		        div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
+		        canvas.appendChild(div);
+		    });
+		}
+		
+		// עדכון פונקציית השמירה (saveAsset) לחישוב אחוזים ראשוני
+		async function saveAsset() {
+		    const name = (document.getElementById('stationName').value || "").trim();
+		    if (!name) return alert("חובה להזין שם עמדה");
+		
+		    const isDuplicate = db[currentRoom]?.some(a => a.name === name && a.id !== editingId);
+		    if (isDuplicate) return alert("שם העמדה כבר קיים בחדר זה!");
+		
+		    const rect = canvas.getBoundingClientRect();
+		    // המרת מיקום הלחיצה (פיקסלים) לאחוזים מהקנבס
+		    const xPct = ((lastCoords.x - rect.left) / rect.width) * 100;
+		    const yPct = ((lastCoords.y - rect.top) / rect.height) * 100;
+		
+		    const assetData = {
+		        type: document.getElementById('assetType').value,
+		        name: name,
+		        pc: document.getElementById('pcSku').value,
+		        mon: document.getElementById('monitorSku').value
+		    };
+		
+		    if (editingId) {
+		        const idx = db[currentRoom].findIndex(a => a.id === editingId);
+		        db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
+		    } else {
+		        if (!db[currentRoom]) db[currentRoom] = [];
+		        db[currentRoom].push({ id: Date.now(), ...assetData, x: xPct, y: yPct });
+		    }
+		
+		    renderAssets();
+		    closeModal();
+		    await manualSync();
 		}
 		
         async function deleteAsset(id) {
@@ -387,23 +433,6 @@
             closeModal();
             await manualSync();
         }
-
-        function renderAssets() {
-			canvas.innerHTML = '';
-			if (db[currentRoom]) db[currentRoom].forEach(asset => {
-				const div = document.createElement('div');
-				div.className = 'asset-icon';
-				div.setAttribute('data-id', asset.id);
-				
-				// שימוש ב-% במקום ב-px
-				div.style.left = asset.x + '%';
-				div.style.top = asset.y + '%';
-				
-				let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻️";
-				div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
-				canvas.appendChild(div);
-			});
-		}
 
         function showForm(data = null) {
             overlay.style.display = 'block'; modal.style.display = 'block';
@@ -444,4 +473,5 @@
         loadData();
     </script>
 </body>
+
 </html>
