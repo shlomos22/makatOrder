@@ -2,446 +2,396 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ניהול לטרון | AssetMap Pro</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AssetMap Pro | Grid & Drag</title>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;500;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #00f2ff; --bg-dark: #0a0c14; --bg-panel: #161b2a;
             --text-main: #e6edf3; --text-muted: #8b949e; --danger: #ff4d4d;
-            --success: #28a745; --glass-border: rgba(255, 255, 255, 0.1); --transition: all 0.25s ease;
+            --glass-border: rgba(255, 255, 255, 0.1); --transition: all 0.2s ease;
         }
 
         body {
             font-family: 'Heebo', sans-serif; margin: 0; background-color: var(--bg-dark);
-            color: var(--text-main); overflow: hidden; display: flex;
-            justify-content: center; align-items: center; height: 100vh;
+            color: var(--text-main); height: 100vh; overflow: hidden; touch-action: manipulation;
         }
 
-        /* לובי */
-        #lobby { display: flex; flex-direction: column; align-items: center; gap: 40px; width: 100%; max-width: 1000px; padding: 40px; }
-        .room-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; }
+        /* מסך לובי */
+        #lobby {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; gap: 30px; padding: 20px; box-sizing: border-box;
+        }
+
+        .room-grid-lobby {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px; width: 100%; max-width: 900px;
+        }
+
         .room-card {
-            background-color: var(--bg-panel); padding: 40px 20px; border-radius: 20px;
-            border: 1px solid var(--glass-border); cursor: pointer; transition: var(--transition); text-align: center;
-        }
-        .room-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 0 30px rgba(0, 242, 255, 0.15); }
-
-        /* מסך החדר */
-        #room-view { display: none; position: relative; width: 100vw; height: 100vh; opacity: 0; transition: var(--transition); }
-        #room-header {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; gap: 15px; background: rgba(22, 27, 42, 0.95);
-            padding: 10px 20px; border-radius: 40px; border: 1px solid var(--glass-border);
-            backdrop-filter: blur(15px); z-index: 100; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background: var(--bg-panel); padding: 30px; border-radius: 20px;
+            border: 1px solid var(--glass-border); cursor: pointer; transition: var(--transition);
+            text-align: center; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
         }
 
-        /* כפתורים למעלה */
-        .header-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--glass-border); cursor: pointer; font-weight: bold; font-family: inherit; transition: var(--transition); color: white; }
-        .back-btn { background: rgba(255,255,255,0.1); }
-        .sync-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+        .room-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 0 25px rgba(0, 242, 255, 0.15); }
 
-        #canvas {
-		    width: 100%; height: 100%; position: relative; cursor: crosshair;
-		    background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px); background-size: 40px 40px;
-		    /* מונע מהמסך לזוז כשגוררים בטלפון */
-		    touch-action: none; 
-		}
-		
-        /* אייקון עמדה */
-		.asset-icon { 
-		    position: absolute; display: flex; flex-direction: column; align-items: center; 
-		    z-index: 10; user-select: none;
-		    /* מיקום לפי מרכז האייקון */
-		    transform: translate(-50%, -50%); 
-		}
-        .asset-icon:active { cursor: grabbing; }
-        .asset-name-tag { font-size: 12px; font-weight: 800; color: var(--primary); margin-bottom: 4px; background: rgba(0,0,0,0.7); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
-        .asset-visual { background: #1c2135; border: 1px solid var(--glass-border); padding: 10px; border-radius: 12px; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); pointer-events: none; }
+        /* מסך חדר */
+        #room-view { display: none; height: 100vh; flex-direction: column; }
+
+        #top-bar {
+            height: 65px; background: rgba(22, 27, 42, 0.95); display: flex; align-items: center;
+            justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px); z-index: 50;
+        }
+
+        /* הטבלה - הגריד */
+        #grid-container {
+            flex: 1; overflow: auto; padding: 30px;
+            display: grid; gap: 6px; justify-content: center; align-content: start;
+            user-select: none; -webkit-user-select: none;
+        }
+
+        .grid-cell {
+            width: 85px; height: 85px; background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05); border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; position: relative; transition: background 0.2s, transform 0.1s;
+        }
+
+        .grid-cell.occupied { background: #1c2135; border-color: var(--glass-border); box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .grid-cell.dragging { opacity: 0.5; transform: scale(0.9); border: 2px dashed var(--primary); z-index: 100; }
+        .grid-cell.drop-target { background: rgba(0, 242, 255, 0.15) !important; border: 2px solid var(--primary) !important; }
+
+        .cell-icon { font-size: 26px; margin-bottom: 4px; pointer-events: none; }
+        .cell-label { font-size: 10px; font-weight: 800; color: var(--primary); text-align: center; pointer-events: none; }
 
         /* מודאלים */
-        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); z-index: 999; }
-        #modal {
+        .modal {
             display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: var(--bg-panel); padding: 30px; border-radius: 24px; border: 1px solid var(--glass-border);
-            z-index: 1000; width: 340px; box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+            background: var(--bg-panel); padding: 25px; border-radius: 24px;
+            z-index: 1000; width: 330px; border: 1px solid var(--glass-border);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.7);
         }
-        .input-group { margin-bottom: 12px; }
-        label { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 0.8rem; }
-        input, select { width: 100%; padding: 12px; background: #0a0c14; border: 1px solid var(--glass-border); border-radius: 10px; color: white; box-sizing: border-box; font-family: inherit; }
-        
-        .btn-row { display: flex; gap: 8px; margin-top: 20px; }
-        button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 800; cursor: pointer; transition: var(--transition); font-family: inherit; }
-        .btn-save { background: var(--primary); color: #000; }
-        .btn-cancel { background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--glass-border); }
-        .btn-edit { background: #ffcc00; color: #000; }
-        .btn-delete { background: var(--danger); color: white; }
-		/* כפתור סנכרון - מתחיל זהה לחזור */
-		.sync-btn { 
-			background: rgba(255,255,255,0.1); 
-			border: 1px solid var(--glass-border);
-			color: white;
-		}
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 999; }
 
-		/* מצבי תוצאה */
-		.sync-success { 
-			background-color: var(--success) !important; 
-			border-color: var(--success) !important;
-			color: white !important;
-		}
+        label { display: block; margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); }
+        input, select, textarea {
+            width: 100%; padding: 12px; margin: 5px 0; background: #0a0c14; border: 1px solid var(--glass-border);
+            color: white; border-radius: 10px; font-family: inherit; box-sizing: border-box; font-size: 15px;
+        }
 
-		.sync-error { 
-			background-color: var(--danger) !important; 
-			border-color: var(--danger) !important;
-			color: white !important;
-		}
-		
-		/* מיכל הכותרת - מבטיח שורה אחת */
-		#room-header {
-			position: absolute; 
-			top: 20px; 
-			left: 50%; 
-			transform: translateX(-50%);
-			display: flex; /* מסדר את הילדים בשורה */
-			flex-direction: row; /* כיוון שורה */
-			align-items: center; /* יישור אנכי למרכז */
-			gap: 15px; /* רווח קבוע בין האלמנטים */
-			background: rgba(22, 27, 42, 0.95);
-			padding: 10px 20px; 
-			border-radius: 40px; 
-			border: 1px solid var(--glass-border);
-			backdrop-filter: blur(15px); 
-			z-index: 100;
-			box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-			
-			/* מונע מהמיכל להתכווץ יותר מדי */
-			min-width: max-content; 
-			max-width: 90vw; /* שלא יצא מגבולות המסך בטלפון */
-		}
+        .btn { padding: 12px 20px; border-radius: 12px; border: none; font-weight: 800; cursor: pointer; transition: var(--transition); font-family: inherit; }
+        .btn-primary { background: var(--primary); color: #000; width: 100%; margin-top: 15px; }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--glass-border); }
+        .btn-danger { background: var(--danger); color: white; width: 100%; margin-top: 8px; }
 
-		/* הגדרות כפתור גמיש */
-		.header-btn {
-			padding: 8px 16px; 
-			border-radius: 20px; 
-			border: 1px solid var(--glass-border); 
-			cursor: pointer; 
-			font-weight: bold; 
-			font-family: inherit; 
-			transition: var(--transition); 
-			color: white;
-			
-			/* קריטי: מונע מהטקסט לרדת שורה וגורם לכפתור להתרחב לפי הכיתוב */
-			white-space: nowrap; 
-			width: auto; 
-			flex-shrink: 0; /* מונע מהכפתור להתכווץ אם אין מקום */
-		}
-
-		/* שם החדר באמצע - יתפוס את המרחב שנותר או יתכווץ בעדינות */
-		#room-title {
-			margin: 0;
-			font-size: 1.2rem;
-			color: var(--primary);
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis; /* אם השם ארוך מדי, הוא יסתיים ב... */
-		}
-		.asset-icon { 
-			position: absolute; 
-			display: flex; 
-			flex-direction: column; 
-			align-items: center; 
-			cursor: grab; 
-			z-index: 10; 
-			user-select: none;
-			transform: translate(-50%, -50%); /* מבטיח שהמרכז הוא הנקודה המדויקת */
-		}
+        .header-btns { display: flex; gap: 8px; }
     </style>
 </head>
 <body>
 
-    <div id="lobby">
-        <h1 style="font-weight: 900; color: white;">ניהול לטרון <span style="color:var(--primary)">AssetMap</span></h1>
-        <div class="room-grid">
-            <div class="room-card" onclick="enterRoom('חמ\'ל רבצ\'ר')"><h3>חמ"ל רבצ"ר</h3></div>
-            <div class="room-card" onclick="enterRoom('חד\'ן רבצ\'ר')"><h3>חד"ן רבצ"ר</h3></div>
-            <div class="room-card" onclick="enterRoom('מכלול תאים')"><h3>מכלול תאים</h3></div>
-            <div class="room-card" onclick="enterRoom('מאנ\'ח')"><h3>מאנ"ח</h3></div>
-            <div class="room-card" onclick="enterRoom('תר\'ח לטרון')"><h3>תר"ח לטרון</h3></div>
-            <div class="room-card" onclick="enterRoom('תר\'ח לאומי')"><h3>תר"ח לאומי</h3></div>
+<div id="lobby">
+    <h1 style="font-weight: 900; margin:0">AssetMap <span style="color:var(--primary)">Latrun</span></h1>
+    <div class="room-grid-lobby" id="lobby-rooms">
+        <div class="room-card" onclick="enterRoom('חמ\'ל רבצ\'ר')"><h3>חמ"ל רבצ"ר</h3></div>
+        <div class="room-card" onclick="enterRoom('חד\'ן רבצ\'ר')"><h3>חד"ן רבצ"ר</h3></div>
+        <div class="room-card" onclick="enterRoom('מכלול תאים')"><h3>מכלול תאים</h3></div>
+        <div class="room-card" onclick="enterRoom('מאנ\'ח')"><h3>מאנ"ח</h3></div>
+        <div class="room-card" onclick="enterRoom('תר\'ח לטרון')"><h3>תר"ח לטרון</h3></div>
+        <div class="room-card" onclick="enterRoom('תר\'ח לאומי')"><h3>תר"ח לאומי</h3></div>
+    </div>
+</div>
+
+<div id="room-view">
+    <div id="top-bar">
+        <button onclick="showLobby()" class="btn btn-secondary">← חזרה</button>
+        <h3 id="room-title" style="margin:0; color:var(--primary)"></h3>
+        <div class="header-btns">
+            <button id="sync-btn" onclick="manualSync()" class="btn btn-secondary">סנכרון 🔄</button>
+            <button onclick="openSettings()" class="btn btn-secondary">⚙️</button>
         </div>
     </div>
+    <div id="grid-container"></div>
+</div>
 
-    <div id="room-view">
-        <div id="room-header">
-            <button class="header-btn back-btn" onclick="exitRoom()">← חזור</button>
-            <h2 id="room-title" style="margin: 0; font-size: 1.2rem; color: var(--primary);"></h2>
-			<button class="header-btn sync-btn" onclick="manualSync()">סנכרון 🔄</button>
-        </div>
-        <div id="canvas"></div>
+<div id="overlay" class="overlay" onclick="closeModals()"></div>
+
+<div id="settings-modal" class="modal">
+    <h3 style="margin-top:0">הגדרות חדר ומלאי</h3>
+    <label>ממדי הטבלה (שורות x עמודות)</label>
+    <div style="display: flex; gap: 10px;">
+        <input type="number" id="set-rows" placeholder="שורות">
+        <input type="number" id="set-cols" placeholder="עמודות">
     </div>
+    <hr style="border:0; border-top:1px solid var(--glass-border); margin:15px 0;">
+    <label>ניהול מלאי מק"טים (גלובלי)</label>
+    <select id="inv-type-select" onchange="loadInventoryText()">
+        <option value="PC">PC (מארזים)</option>
+        <option value="MONITOR">MONITOR (מסכים)</option>
+        <option value="TV">TV (טלוויזיות)</option>
+        <option value="PRINTER">PRINTER (מדפסות)</option>
+        <option value="UC">UC (טלפוניה)</option>
+    </select>
+    <textarea id="inv-text-area" rows="5" placeholder="הכנס מקטים מופרדים בפסיקים..."></textarea>
+    <button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button>
+</div>
 
-    <div id="overlay" onclick="closeModal()"></div>
+<div id="asset-modal" class="modal">
+    <h3 id="asset-modal-title" style="margin-top:0">הגדרת עמדה</h3>
+    <label>שם עמדה / תפקיד</label>
+    <input type="text" id="asset-name" placeholder="לדוגמא: קמב''ץ">
     
-    <div id="modal">
-        <h3 id="modalTitle">הגדרת עמדה</h3>
-        <div id="formFields">
-            <div class="input-group">
-                <label>סוג עמדה</label>
-                <select id="assetType" onchange="toggleFields()">
-                    <option value="station">💻️ עמדת מחשב + מסך</option>
-                    <option value="printer">🖨️ מדפסת</option>
-                    <option value="tv">📺 טלוויזיה</option>
-                    <option value="uc">📞 טלפון UC</option>
-                </select>
-            </div>
-            <div class="input-group">
-                <label>שם עמדה (ייחודי)</label>
-                <input type="text" id="stationName">
-            </div>
-            <div id="skuFields">
-                <div class="input-group" id="pcGroup"><label>מק"ט מחשב</label><input type="text" id="pcSku"></div>
-                <div class="input-group" id="monGroup"><label id="monLabel">מק"ט מסך</label><input type="text" id="monitorSku"></div>
-            </div>
-            <div class="btn-row">
-                <button class="btn-save" id="saveBtn" onclick="saveAsset()">שמור וסנכרן</button>
-                <button class="btn-cancel" onclick="closeModal()">ביטול</button>
-            </div>
-        </div>
+    <label>סוג ציוד</label>
+    <select id="asset-type" onchange="updateSkuDropdowns()">
+        <option value="STATION">💻 תחנת עבודה (PC + מסך)</option>
+        <option value="PC">🖥️ PC עצמאי</option>
+        <option value="MONITOR">📺 מסך עצמאי</option>
+        <option value="PRINTER">🖨️ מדפסת</option>
+        <option value="TV">📡 טלוויזיה</option>
+        <option value="UC">📞 טלפון UC</option>
+    </select>
 
-        <div id="detailsFields" style="display:none;">
-            <div id="viewContent"></div>
-            <div class="btn-row">
-                <button class="btn-edit" id="editBtn">ערוך ✏️</button>
-                <button class="btn-delete" id="deleteBtn">מחק 🗑️</button>
-            </div>
-            <button class="btn-cancel" style="width:100%; margin-top:10px;" onclick="closeModal()">סגור</button>
+    <div id="sku-selection-area">
+        <div id="pc-sku-div">
+            <label id="pc-label">מק"ט מחשב</label>
+            <select id="main-sku-select"></select>
+        </div>
+        <div id="mon-sku-div">
+            <label>מק"ט מסך</label>
+            <select id="mon-sku-select"></select>
         </div>
     </div>
-	<script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyhSXO_Xw0MaB4U2aCdLrPHeo9ez6UJSG-xNVwGyR8JxoKJrCWK_7s9F1uAY2MXuJ3tRQ/exec"; 
-        
-        const canvas = document.getElementById('canvas');
-        const modal = document.getElementById('modal');
-        const overlay = document.getElementById('overlay');
-        
-        let currentRoom = "";
-        let lastCoords = { x: 0, y: 0 };
-        let editingId = null;
-        let db = {};
 
-        let isDragging = false;
-        let activeAsset = null;
-        let dragOffset = { x: 0, y: 0 };
-        let longPressTimer = null;
-        const LONG_PRESS_DURATION = 300;
+    <div id="delete-area" style="display:none; margin-top:15px; border-top:1px solid var(--glass-border); padding-top:10px;">
+        <button class="btn btn-danger" onclick="deleteAsset()">מחק עמדה 🗑️</button>
+    </div>
 
-        async function loadData() {
+    <button class="btn btn-primary" onclick="saveAsset()">שמור עמדה</button>
+    <button class="btn btn-secondary" style="width:100%; margin-top:8px" onclick="closeModals()">ביטול</button>
+</div>
+
+<script>
+    // --- הגדרות ומשתנים ---
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyhSXO_Xw0MaB4U2aCdLrPHeo9ez6UJSG-xNVwGyR8JxoKJrCWK_7s9F1uAY2MXuJ3tRQ/exec";
+
+    let db = {
+        rooms: {}, 
+        inventory: { PC: [], MONITOR: [], TV: [], PRINTER: [], UC: [] }
+    };
+    let currentRoom = "";
+    let selectedCell = null;
+    let dragSource = null;
+    let pressTimer = null;
+
+    async function init() {
+        const saved = localStorage.getItem('assetMap_Latrun_Final');
+        if (saved) db = JSON.parse(saved);
+        renderLobby(); // נרנדר קודם את הלובי מהזכרון המקומי
+
+        if (SCRIPT_URL !== "הכנס_כאן_את_הכתובת_שלך") {
             try {
-                const response = await fetch(SCRIPT_URL);
-                db = await response.json();
-            } catch (e) {
-                db = JSON.parse(localStorage.getItem('roomDB_latrun')) || {};
-            }
-            renderAssets();
-        }
-
-        // פונקציות הכניסה והיציאה - כאן התיקון המרכזי
-        function enterRoom(roomName) {
-            currentRoom = roomName;
-            document.getElementById('room-title').innerText = roomName;
-            document.getElementById('lobby').style.display = 'none';
-            document.getElementById('room-view').style.display = 'block';
-            setTimeout(() => {
-                document.getElementById('room-view').style.opacity = '1';
-                // חיבור המאזינים רק כשנכנסים לחדר
-                attachCanvasEvents();
-            }, 50);
-            renderAssets();
-        }
-
-        function exitRoom() {
-            document.getElementById('room-view').style.opacity = '0';
-            // ניתוק המאזינים כשיוצאים ללובי
-            detachCanvasEvents();
-            setTimeout(() => {
-                document.getElementById('room-view').style.display = 'none';
-                document.getElementById('lobby').style.display = 'flex';
-            }, 300);
-        }
-
-        function getCoords(e) {
-            if (e.touches && e.touches.length > 0) {
-                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            }
-            return { x: e.clientX, y: e.clientY };
-        }
-
-        const startAction = (e) => {
-            const coords = getCoords(e);
-            const icon = e.target.closest('.asset-icon');
-            if (icon) {
-                activeAsset = icon;
-                longPressTimer = setTimeout(() => {
-                    isDragging = true;
-                    activeAsset.style.filter = 'brightness(1.5)';
-                }, LONG_PRESS_DURATION);
-            } else if (e.target === canvas) {
-                lastCoords = { x: coords.x, y: coords.y };
-            }
-        };
-
-        const moveAction = (e) => {
-            if (!isDragging || !activeAsset) return;
-            if (e.cancelable) e.preventDefault();
-            const coords = getCoords(e);
-            activeAsset.style.left = coords.x + 'px';
-            activeAsset.style.top = coords.y + 'px';
-        };
-
-        const endAction = (e) => {
-            clearTimeout(longPressTimer);
-            if (activeAsset) {
-                const id = activeAsset.getAttribute('data-id');
-                const asset = db[currentRoom]?.find(a => String(a.id) === String(id));
-                if (isDragging && asset) {
-                    const rect = canvas.getBoundingClientRect();
-                    const finalCoords = getCoords(e.changedTouches ? e.changedTouches[0] : e);
-                    asset.x = ((finalCoords.x - rect.left) / rect.width) * 100;
-                    asset.y = ((finalCoords.y - rect.top) / rect.height) * 100;
-                    saveToLocal();
-                    renderAssets(); 
-                } else if (!isDragging && asset) {
-                    showDetails(asset);
+                const res = await fetch(SCRIPT_URL);
+                const data = await res.json();
+                if (data && data.rooms) { 
+                    db = data; 
+                    saveLocal(); 
+                    renderGrid(); 
                 }
-            } else if (e.target === canvas && !isDragging) {
-                showForm();
+            } catch(e) { console.warn("Offline Mode or Script URL issue"); }
+        }
+    }
+
+    function showLobby() {
+        document.getElementById('room-view').style.display = 'none';
+        document.getElementById('lobby').style.display = 'flex';
+    }
+
+    function enterRoom(name) {
+        currentRoom = name;
+        document.getElementById('room-title').innerText = name;
+        document.getElementById('lobby').style.display = 'none';
+        document.getElementById('room-view').style.display = 'flex';
+        if (!db.rooms[name]) db.rooms[name] = { rows: 6, cols: 8, assets: {} };
+        renderGrid();
+    }
+
+    function renderGrid() {
+        if (!currentRoom) return;
+        const room = db.rooms[currentRoom];
+        const container = document.getElementById('grid-container');
+        container.style.gridTemplateColumns = `repeat(${room.cols}, 85px)`;
+        container.innerHTML = '';
+
+        for (let r = 0; r < room.rows; r++) {
+            for (let c = 0; c < room.cols; c++) {
+                const cellId = `${r}-${c}`;
+                const asset = room.assets[cellId];
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell' + (asset ? ' occupied' : '');
+                cell.id = `cell-${cellId}`;
+                cell.dataset.id = cellId;
+
+                if (asset) {
+                    const icons = {STATION:'💻', PC:'🖥️', MONITOR:'📺', PRINTER:'🖨️', TV:'📡', UC:'📞'};
+                    cell.innerHTML = `<span class="cell-icon">${icons[asset.type] || '❓'}</span><span class="cell-label">${asset.name}</span>`;
+                }
+
+                let isLongPress = false;
+                const onStart = (e) => {
+                    isLongPress = false;
+                    if (asset) {
+                        pressTimer = setTimeout(() => {
+                            isLongPress = true;
+                            startDragging(cellId);
+                        }, 550);
+                    }
+                };
+                const onEnd = (e) => {
+                    clearTimeout(pressTimer);
+                    if (!isLongPress && !dragSource) {
+                        openAssetModal(cellId);
+                    }
+                };
+
+                cell.onmousedown = onStart;
+                cell.ontouchstart = (e) => onStart(e);
+                cell.onmouseup = onEnd;
+                cell.ontouchend = (e) => onEnd(e);
+                container.appendChild(cell);
             }
-            isDragging = false;
-            activeAsset = null;
+        }
+    }
+
+    function startDragging(cellId) {
+        dragSource = cellId;
+        document.getElementById(`cell-${cellId}`).classList.add('dragging');
+        document.querySelectorAll('.grid-cell').forEach(c => {
+            c.onmouseenter = () => { if(dragSource) c.classList.add('drop-target'); };
+            c.onmouseleave = () => { c.classList.remove('drop-target'); };
+            c.onclick = (e) => {
+                if (dragSource) {
+                    e.stopPropagation();
+                    finalizeMove(c.dataset.id);
+                }
+            };
+        });
+    }
+
+    function finalizeMove(targetId) {
+        if (dragSource && dragSource !== targetId) {
+            const asset = db.rooms[currentRoom].assets[dragSource];
+            delete db.rooms[currentRoom].assets[dragSource];
+            db.rooms[currentRoom].assets[targetId] = asset;
+            saveLocal();
+            manualSync();
+        }
+        dragSource = null;
+        renderGrid();
+    }
+
+    function loadInventoryText() {
+        const type = document.getElementById('inv-type-select').value;
+        document.getElementById('inv-text-area').value = (db.inventory[type] || []).join(', ');
+    }
+
+    function openSettings() {
+        const room = db.rooms[currentRoom];
+        document.getElementById('set-rows').value = room.rows;
+        document.getElementById('set-cols').value = room.cols;
+        loadInventoryText();
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('settings-modal').style.display = 'block';
+    }
+
+    function saveSettings() {
+        const room = db.rooms[currentRoom];
+        room.rows = parseInt(document.getElementById('set-rows').value) || 5;
+        room.cols = parseInt(document.getElementById('set-cols').value) || 5;
+        const type = document.getElementById('inv-type-select').value;
+        db.inventory[type] = document.getElementById('inv-text-area').value.split(',').map(s => s.trim()).filter(s => s);
+        saveLocal(); renderGrid(); closeModals(); manualSync();
+    }
+
+    function openAssetModal(cellId) {
+        selectedCell = cellId;
+        const asset = db.rooms[currentRoom].assets[cellId];
+        document.getElementById('asset-name').value = asset ? asset.name : "";
+        document.getElementById('asset-type').value = asset ? asset.type : "STATION";
+        updateSkuDropdowns(asset ? asset.sku : null, asset ? asset.monSku : null);
+        document.getElementById('overlay').style.display = 'block';
+        document.getElementById('asset-modal').style.display = 'block';
+    }
+
+    function updateSkuDropdowns(sSku = null, sMon = null) {
+        const type = document.getElementById('asset-type').value;
+        const mainSel = document.getElementById('main-sku-select');
+        const monSel = document.getElementById('mon-sku-select');
+        const pcDiv = document.getElementById('pc-sku-div');
+        const monDiv = document.getElementById('mon-sku-div');
+        const pcLabel = document.getElementById('pc-label');
+
+        mainSel.innerHTML = monSel.innerHTML = '<option value="">-- ללא --</option>';
+        pcDiv.style.display = 'none'; monDiv.style.display = 'none';
+
+        if (type === 'STATION') {
+            pcDiv.style.display = 'block'; monDiv.style.display = 'block';
+            pcLabel.innerText = 'מק"ט PC';
+            (db.inventory.PC || []).forEach(s => mainSel.add(new Option(s, s, false, s === sSku)));
+            (db.inventory.MONITOR || []).forEach(s => monSel.add(new Option(s, s, false, s === sMon)));
+        } else if (type === 'PC') {
+            pcDiv.style.display = 'block'; pcLabel.innerText = 'מק"ט PC';
+            (db.inventory.PC || []).forEach(s => mainSel.add(new Option(s, s, false, s === sSku)));
+        } else if (type === 'MONITOR' || type === 'TV') {
+            monDiv.style.display = 'block';
+            const src = type === 'MONITOR' ? db.inventory.MONITOR : db.inventory.TV;
+            (src || []).forEach(s => monSel.add(new Option(s, s, false, s === sMon)));
+        } else {
+            pcDiv.style.display = 'block'; pcLabel.innerText = 'מק"ט ' + type;
+            (db.inventory[type] || []).forEach(s => mainSel.add(new Option(s, s, false, s === sSku)));
+        }
+    }
+
+    function saveAsset() {
+        const nameInput = document.getElementById('asset-name');
+        if (!nameInput.value.trim()) return alert("חובה להזין שם עמדה");
+        
+        const type = document.getElementById('asset-type').value;
+        db.rooms[currentRoom].assets[selectedCell] = {
+            name: nameInput.value.trim(),
+            type: type,
+            sku: document.getElementById('main-sku-select').value,
+            monSku: document.getElementById('mon-sku-select').value
         };
 
-        // פונקציות עזר לניהול אירועים
-        function attachCanvasEvents() {
-            canvas.addEventListener('mousedown', startAction);
-            canvas.addEventListener('touchstart', startAction, { passive: false });
-            window.addEventListener('mousemove', moveAction);
-            window.addEventListener('touchmove', moveAction, { passive: false });
-            window.addEventListener('mouseup', endAction);
-            window.addEventListener('touchend', endAction);
+        saveLocal(); 
+        renderGrid(); 
+        closeModals(); 
+        manualSync(); // יתבצע ברקע
+    }
+
+    function deleteAsset() {
+        if (confirm("למחוק את העמדה?")) {
+            delete db.rooms[currentRoom].assets[selectedCell];
+            saveLocal(); renderGrid(); closeModals(); manualSync();
         }
+    }
 
-        function detachCanvasEvents() {
-            canvas.removeEventListener('mousedown', startAction);
-            canvas.removeEventListener('touchstart', startAction);
-            window.removeEventListener('mousemove', moveAction);
-            window.removeEventListener('touchmove', moveAction);
-            window.removeEventListener('mouseup', endAction);
-            window.removeEventListener('touchend', endAction);
-        }
+    function saveLocal() { localStorage.setItem('assetMap_Latrun_Final', JSON.stringify(db)); }
+    function closeModals() { document.querySelectorAll('.modal, .overlay').forEach(e => e.style.display = 'none'); }
 
-        function renderAssets() {
-            canvas.innerHTML = '';
-            if (!currentRoom || !db[currentRoom]) return;
-            db[currentRoom].forEach(asset => {
-                const div = document.createElement('div');
-                div.className = 'asset-icon';
-                div.setAttribute('data-id', asset.id);
-                div.style.left = asset.x + '%';
-                div.style.top = asset.y + '%';
-                let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻";
-                div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
-                canvas.appendChild(div);
-            });
-        }
+    async function manualSync() {
+        if (SCRIPT_URL === "הכנס_כאן_את_הכתובת_שלך") return;
+        const btn = document.getElementById('sync-btn');
+        btn.innerText = "...";
+        try {
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(db) });
+            btn.innerText = "סונכרן ✅";
+        } catch(e) { btn.innerText = "שגיאה ❌"; }
+        setTimeout(() => btn.innerText = "סנכרון 🔄", 2000);
+    }
 
-        async function manualSync() {
-            const btn = document.querySelector('.sync-btn');
-            btn.innerText = "מסנכרן...";
-            saveToLocal();
-            try {
-                await fetch(SCRIPT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: "saveAll", db: db })
-                });
-                btn.innerText = "סונכרן בהצלחה ✅";
-                btn.classList.add('sync-success');
-            } catch (e) {
-                btn.innerText = "תקלה בסנכרון ❌";
-                btn.classList.add('sync-error');
-            }
-            setTimeout(() => {
-                btn.innerText = "סנכרון 🔄";
-                btn.classList.remove('sync-success', 'sync-error');
-            }, 3000);
-        }
-
-        function saveToLocal() { localStorage.setItem('roomDB_latrun', JSON.stringify(db)); }
-
-        function showForm(data = null) {
-            overlay.style.display = 'block'; modal.style.display = 'block';
-            document.getElementById('formFields').style.display = 'block';
-            document.getElementById('detailsFields').style.display = 'none';
-            if (data) {
-                editingId = data.id; document.getElementById('assetType').value = data.type;
-                document.getElementById('stationName').value = data.name;
-                document.getElementById('pcSku').value = data.pc || ''; document.getElementById('monitorSku').value = data.mon || '';
-            } else {
-                editingId = null; document.getElementById('stationName').value = '';
-                document.getElementById('pcSku').value = ''; document.getElementById('monitorSku').value = '';
-            }
-            toggleFields();
-        }
-
-        async function saveAsset() {
-            const name = (document.getElementById('stationName').value || "").trim();
-            if (!name) return alert("חובה להזין שם עמדה");
-            const rect = canvas.getBoundingClientRect();
-            const xPct = ((lastCoords.x - rect.left) / rect.width) * 100;
-            const yPct = ((lastCoords.y - rect.top) / rect.height) * 100;
-            const assetData = {
-                type: document.getElementById('assetType').value,
-                name: name,
-                pc: document.getElementById('pcSku').value,
-                mon: document.getElementById('monitorSku').value
-            };
-            if (editingId) {
-                const idx = db[currentRoom].findIndex(a => a.id === editingId);
-                db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
-            } else {
-                if (!db[currentRoom]) db[currentRoom] = [];
-                db[currentRoom].push({ id: Date.now(), ...assetData, x: xPct, y: yPct });
-            }
-            renderAssets(); closeModal(); await manualSync();
-        }
-
-        function showDetails(asset) {
-            overlay.style.display = 'block'; modal.style.display = 'block';
-            document.getElementById('formFields').style.display = 'none';
-            document.getElementById('detailsFields').style.display = 'block';
-            document.getElementById('viewContent').innerHTML = `<div style="text-align:right;"><b>שם:</b> ${asset.name}<br><b>סוג:</b> ${asset.type}<br>${asset.pc ? `<b>מק"ט:</b> ${asset.pc}` : ''}</div>`;
-            document.getElementById('editBtn').onclick = () => showForm(asset);
-            document.getElementById('deleteBtn').onclick = () => {
-                if(confirm("למחוק?")) { db[currentRoom] = db[currentRoom].filter(a => a.id !== asset.id); renderAssets(); closeModal(); manualSync(); }
-            };
-        }
-
-        function toggleFields() {
-            const type = document.getElementById('assetType').value;
-            document.getElementById('pcGroup').style.display = (type === 'station') ? 'block' : 'none';
-        }
-        function closeModal() { modal.style.display = 'none'; overlay.style.display = 'none'; }
-        
-        loadData();
-    </script>
-
+    window.onload = init; // מבטיח שהקוד ירוץ כשהדף נטען
+</script>    
 </body>
-
 </html>
-
-
-
-
