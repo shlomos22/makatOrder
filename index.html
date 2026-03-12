@@ -140,6 +140,16 @@
 			overflow: hidden;
 			text-overflow: ellipsis; /* אם השם ארוך מדי, הוא יסתיים ב... */
 		}
+		.asset-icon { 
+			position: absolute; 
+			display: flex; 
+			flex-direction: column; 
+			align-items: center; 
+			cursor: grab; 
+			z-index: 10; 
+			user-select: none;
+			transform: translate(-50%, -50%); /* מבטיח שהמרכז הוא הנקודה המדויקת */
+		}
     </style>
 </head>
 <body>
@@ -311,24 +321,26 @@
         });
 
         window.addEventListener('mouseup', (e) => {
-            if (isDragging && activeAsset) {
-                const id = activeAsset.getAttribute('data-id');
-                const asset = db[currentRoom].find(a => a.id == id);
-                
-                if (dragStarted) {
-                    // אם הייתה גרירה - עדכון מיקום מקומי בלבד
-                    asset.x = parseInt(activeAsset.style.left) + 30;
-                    asset.y = parseInt(activeAsset.style.top) + 40;
-                    localStorage.setItem('roomDB_latrun', JSON.stringify(db));
-                } else {
-                    // אם לא זז - פתיחת פרטים בלחיצה בודדת
-                    showDetails(asset);
-                }
-            }
-            isDragging = false;
-            dragStarted = false;
-            activeAsset = null;
-        });
+			if (isDragging && activeAsset) {
+				const id = activeAsset.getAttribute('data-id');
+				const asset = db[currentRoom].find(a => String(a.id) === String(id));
+				
+				if (dragStarted && asset) {
+					const rect = canvas.getBoundingClientRect();
+					// חישוב המיקום החדש באחוזים ביחס לקנבס
+					asset.x = ((e.clientX - rect.left) / rect.width) * 100;
+					asset.y = ((e.clientY - rect.top) / rect.height) * 100;
+					
+					localStorage.setItem('roomDB_latrun', JSON.stringify(db));
+					renderAssets(); // רינדור מחדש כדי "לנעול" את המיקום ב-%
+				} else if (!dragStarted && asset) {
+					showDetails(asset);
+				}
+			}
+			isDragging = false;
+			dragStarted = false;
+			activeAsset = null;
+		});
 
         canvas.addEventListener('click', (e) => {
             if (e.target !== canvas || dragStarted) return;
@@ -337,32 +349,37 @@
         });
 
         async function saveAsset() {
-            const name = (document.getElementById('stationName').value || "").trim();
-            if (!name) return alert("חובה להזין שם עמדה");
+			const name = (document.getElementById('stationName').value || "").trim();
+			if (!name) return alert("חובה להזין שם עמדה");
 
-            const isDuplicate = db[currentRoom]?.some(a => a.name === name && a.id !== editingId);
-            if (isDuplicate) return alert("שם העמדה כבר קיים בחדר זה!");
+			const isDuplicate = db[currentRoom]?.some(a => a.name === name && a.id !== editingId);
+			if (isDuplicate) return alert("שם העמדה כבר קיים בחדר זה!");
 
-            const assetData = {
-                type: document.getElementById('assetType').value,
-                name: name,
-                pc: document.getElementById('pcSku').value,
-                mon: document.getElementById('monitorSku').value
-            };
+			const rect = canvas.getBoundingClientRect();
+			// המרת מיקום הלחיצה (פיקסלים) לאחוזים מהקנבס
+			const xPct = ((lastCoords.x - rect.left) / rect.width) * 100;
+			const yPct = ((lastCoords.y - rect.top) / rect.height) * 100;
 
-            if (editingId) {
-                const idx = db[currentRoom].findIndex(a => a.id === editingId);
-                db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
-            } else {
-                if (!db[currentRoom]) db[currentRoom] = [];
-                db[currentRoom].push({ id: Date.now(), ...assetData, x: lastCoords.x, y: lastCoords.y });
-            }
+			const assetData = {
+				type: document.getElementById('assetType').value,
+				name: name,
+				pc: document.getElementById('pcSku').value,
+				mon: document.getElementById('monitorSku').value
+			};
 
-            renderAssets();
-            closeModal();
-            await manualSync(); // שמירה אקטיבית רק פה
-        }
+			if (editingId) {
+				const idx = db[currentRoom].findIndex(a => a.id === editingId);
+				db[currentRoom][idx] = { ...db[currentRoom][idx], ...assetData };
+			} else {
+				if (!db[currentRoom]) db[currentRoom] = [];
+				db[currentRoom].push({ id: Date.now(), ...assetData, x: xPct, y: yPct });
+			}
 
+			renderAssets();
+			closeModal();
+			await manualSync();
+		}
+		
         async function deleteAsset(id) {
             if (!confirm("למחוק עמדה זו?")) return;
             db[currentRoom] = db[currentRoom].filter(a => a.id !== id);
@@ -372,18 +389,21 @@
         }
 
         function renderAssets() {
-            canvas.innerHTML = '';
-            if (db[currentRoom]) db[currentRoom].forEach(asset => {
-                const div = document.createElement('div');
-                div.className = 'asset-icon';
-                div.setAttribute('data-id', asset.id);
-                div.style.left = (asset.x - 30) + 'px';
-                div.style.top = (asset.y - 40) + 'px';
-                let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻🖥️";
-                div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
-                canvas.appendChild(div);
-            });
-        }
+			canvas.innerHTML = '';
+			if (db[currentRoom]) db[currentRoom].forEach(asset => {
+				const div = document.createElement('div');
+				div.className = 'asset-icon';
+				div.setAttribute('data-id', asset.id);
+				
+				// שימוש ב-% במקום ב-px
+				div.style.left = asset.x + '%';
+				div.style.top = asset.y + '%';
+				
+				let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻🖥️";
+				div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
+				canvas.appendChild(div);
+			});
+		}
 
         function showForm(data = null) {
             overlay.style.display = 'block'; modal.style.display = 'block';
