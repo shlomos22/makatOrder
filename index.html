@@ -183,7 +183,7 @@
             <div class="input-group">
                 <label>סוג עמדה</label>
                 <select id="assetType" onchange="toggleFields()">
-                    <option value="station">💻🖥️ עמדת מחשב + מסך</option>
+                    <option value="station">💻️ עמדת מחשב + מסך</option>
                     <option value="printer">🖨️ מדפסת</option>
                     <option value="tv">📺 טלוויזיה</option>
                     <option value="uc">📞 טלפון UC</option>
@@ -399,7 +399,7 @@
 				div.style.left = asset.x + '%';
 				div.style.top = asset.y + '%';
 				
-				let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻🖥️";
+				let icon = (asset.type === 'printer') ? "🖨️" : (asset.type === 'tv') ? "📺" : (asset.type === 'uc') ? "📞" : "💻️";
 				div.innerHTML = `<div class="asset-name-tag">${asset.name}</div><div class="asset-visual">${icon}</div>`;
 				canvas.appendChild(div);
 			});
