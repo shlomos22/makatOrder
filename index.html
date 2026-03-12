@@ -319,27 +319,27 @@
         let dragOffset = { x: 0, y: 0 };
         let longPressTimer = null;
         const LONG_PRESS_DURATION = 300; // זמן במילי-שניות להפעלת גרירה
-
+		
         const startAction = (e) => {
+            // אם אנחנו בלובי, אל תבצע שום פעולת גרירה/קנבס
+            if (document.getElementById('lobby').style.display !== 'none') return;
+
             const coords = getCoords(e);
             const icon = e.target.closest('.asset-icon');
             
             if (icon) {
-                // לחיצה על אייקון קיים
                 activeAsset = icon;
                 const rect = icon.getBoundingClientRect();
                 dragOffset.x = coords.x - rect.left;
                 dragOffset.y = coords.y - rect.top;
 
-                // התחלת טיימר ללחיצה ארוכה
                 longPressTimer = setTimeout(() => {
                     isDragging = true;
                     activeAsset.style.cursor = 'grabbing';
-                    activeAsset.style.filter = 'brightness(1.5)'; // חיווי ויזואלי שהגרירה הופעלה
+                    activeAsset.style.filter = 'brightness(1.5)';
                 }, LONG_PRESS_DURATION);
 
             } else if (e.target === canvas) {
-                // לחיצה על שטח ריק - הכנה ליצירת חדש
                 lastCoords = { x: coords.x, y: coords.y };
             }
         };
@@ -347,26 +347,28 @@
         const moveAction = (e) => {
             if (!isDragging || !activeAsset) return;
             
-            // מניעת גלילה של הדף בזמן גרירה בנייד
+            // מניעת גלילה רק כשבאמת גוררים בתוך חדר
             if (e.cancelable) e.preventDefault();
 
             const coords = getCoords(e);
-            const rect = canvas.getBoundingClientRect();
-
-            // עדכון מיקום ויזואלי
             activeAsset.style.left = coords.x + 'px';
             activeAsset.style.top = coords.y + 'px';
         };
 
         const endAction = (e) => {
-            clearTimeout(longPressTimer); // ביטול הטיימר אם השחרור היה מהיר
+            // אם אנחנו בלובי, שחרר הכל ואל תמשיך
+            if (document.getElementById('lobby').style.display !== 'none') {
+                clearTimeout(longPressTimer);
+                return;
+            }
+
+            clearTimeout(longPressTimer);
 
             if (activeAsset) {
                 const id = activeAsset.getAttribute('data-id');
                 const asset = db[currentRoom]?.find(a => String(a.id) === String(id));
 
                 if (isDragging) {
-                    // סיום גרירה - שמירת מיקום
                     const rect = canvas.getBoundingClientRect();
                     const finalCoords = getCoords(e.changedTouches ? e.changedTouches[0] : e);
                     
@@ -377,11 +379,10 @@
                     activeAsset.style.filter = '';
                     renderAssets(); 
                 } else {
-                    // לחיצה קצרה - הצגת פרטים
                     if (asset) showDetails(asset);
                 }
             } else if (e.target === canvas) {
-                // לחיצה קצרה על שטח ריק - יצירת עמדה חדשה
+                // רק אם זו הייתה לחיצה קצרה על הקנבס
                 showForm();
             }
 
@@ -498,4 +499,5 @@
 </body>
 
 </html>
+
 
